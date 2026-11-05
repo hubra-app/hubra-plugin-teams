@@ -1,20 +1,16 @@
-id: example
-name: Example
-version: "0.1.0"
+id: teams
+name: Teams
+version: "1.0.0"
 hubra: ">=0.2,<1"
-description: "A starting point for a Hubra plugin: one table, an API, a screen and a test."
+description: "Match days for team sports: fixtures from the league's calendar feed, who can play, the coach's line-up, and carpooling to away games."
 author: Hubra
-homepage: https://github.com/hubra-app/hubra-plugins-template
-license: AGPL-3.0-or-later
-tags: [example]
-package: hubra_example
-modules: [example]
-requires: [members]
+homepage: https://github.com/hubra-app/hubra-plugin-teams
+tags: [teams, sports, matches, lineup, carpooling]
+package: hubra_teams
+modules: [teams]
+requires: [members, groups]
 migrations: migrations
 frontend: frontend/dist/plugin.js
 # The areas this plugin extends; Hubra refuses a plugin that touches one it
 # doesn't list. See docs/plugins.md in hubra-app/hubra.
-uses: [routes, tables, settings, nav, frontend]
-# Other plugins it needs, with a version range, e.g.
-# depends:
-#   finance: ">=2.0,<3"
+uses: [routes, tables, jobs, nav, frontend]

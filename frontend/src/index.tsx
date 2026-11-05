@@ -1,22 +1,18 @@
 import { registerPlugin } from '@hubra/plugin-sdk'
-import { IconNote } from '@tabler/icons-react'
-import { NotesScreen } from './NotesScreen'
+import { IconShirtSport } from '@tabler/icons-react'
+import { MatchScreen } from './MatchScreen'
+import { TeamScreen } from './TeamScreen'
+import { TeamsScreen } from './TeamsScreen'
 import translations from './translations.json'
 
-// Everything here shows only while the module is on for the club and the
-// person has `perm`. Other places to add things: `tabs` (a tab on a built-in
-// screen) and `slots` (account.cards, inventory.item, settings.module.actions).
 registerPlugin({
-  id: 'example',
+  id: 'teams',
   routes: [
-    {
-      path: 'example',
-      module: 'example',
-      perm: 'example.notes.read',
-      component: NotesScreen,
-    },
+    { path: 'teams', module: 'teams', component: TeamsScreen },
+    { path: 'teams/matches/:id', module: 'teams', component: MatchScreen },
+    { path: 'teams/:id', module: 'teams', component: TeamScreen },
   ],
-  // The nav entry in hubra_example/__init__.py names this icon.
-  icons: { note: IconNote },
+  // The nav entry in hubra_teams/__init__.py names this icon.
+  icons: { 'shirt-sport': IconShirtSport },
   translations,
 })

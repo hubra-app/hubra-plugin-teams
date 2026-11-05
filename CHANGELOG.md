@@ -1,6 +1,8 @@
-# Example
+# Teams
 
-## 0.1.0
+## 1.0.0
 
-First version of the template: a notice board with one table, an API, a
-club-app screen, a setting and tests.
+First version: teams from the club's groups, fixtures from a league iCal
+feed (hourly) or entered by the coach, mirrored into the club calendar,
+availability with a reminder three days before, line-ups with a
+notification, and carpooling.
