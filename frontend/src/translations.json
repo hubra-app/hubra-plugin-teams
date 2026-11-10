@@ -114,7 +114,13 @@
       "riders": "With: {{names}}",
       "takeSeat": "Ride along",
       "leaveSeat": "Give up seat",
-      "withdrawRide": "Withdraw"
+      "withdrawRide": "Withdraw",
+      "widget": {
+        "matches": "Next matches",
+        "matchesHint": "Your teams next matches with time, place and your answer",
+        "mine": "Only my teams",
+        "count": "How many"
+      }
     }
   },
   "de-CH": {
@@ -232,7 +238,13 @@
       "riders": "Mit: {{names}}",
       "takeSeat": "Mitfahren",
       "leaveSeat": "Platz freigeben",
-      "withdrawRide": "Zurückziehen"
+      "withdrawRide": "Zurückziehen",
+      "widget": {
+        "matches": "Nächste Spiele",
+        "matchesHint": "Die nächsten Spiele deiner Teams mit Zeit, Ort und deiner Antwort",
+        "mine": "Nur meine Teams",
+        "count": "Wie viele"
+      }
     }
   }
 }

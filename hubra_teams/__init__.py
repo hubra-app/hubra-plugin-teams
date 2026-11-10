@@ -17,6 +17,7 @@ Permissions:
     teams.matches.update   coach every team (a group lead coaches their own)
 """
 
+from hubra.core.contracts import WidgetField, widget_contract
 from hubra.core.modules import Blueprint, Module, NavItem, Schedule
 
 module = Module(
@@ -50,5 +51,20 @@ module = Module(
         "teams_picks",
         "teams_rides",
         "teams_seats",
+    ),
+    # Dashboard widgets (hubra_teams/widgets.py).
+    provides=(
+        widget_contract(
+            "teams.matches",
+            "hubra_teams.widgets:matches",
+            label="teams.widget.matches",
+            description="teams.widget.matchesHint",
+            size="m",
+            view="list",
+            fields=(
+                WidgetField("mine", "teams.widget.mine", "switch", True),
+                WidgetField("count", "teams.widget.count", "number", 5),
+            ),
+        ),
     ),
 )
