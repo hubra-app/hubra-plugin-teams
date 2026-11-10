@@ -2,11 +2,12 @@
 
 ## Unreleased
 
-- Dashboard widget **Nächste Spiele**: the next matches of the member's teams (or all teams), with time, place and their own answer.
+- German: gender forms read "Spieler/in", "Trainer/in", like the rest of Hubra; "z. B." with a space.
 
 ## 1.1.0
 
 - Gives the standard roles access when a club first switches it on (`role_defaults`, docs/roles.md in hubra-app/hubra): Mitglied Ansehen, Vorstand Bearbeiten. Roles without access don't see it; their own data from it stays on their profile. Needs Hubra 0.2.5 or later.
+- Dashboard widget **Nächste Spiele**: the next matches of the member's teams (or all teams), with time, place and their own answer.
 
 ## 1.0.0
 
