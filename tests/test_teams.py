@@ -256,3 +256,55 @@ def test_players_without_an_answer_are_reminded_once(app, client, db, club):
         Notification.link == f"/app/teams/matches/{match['id']}"
     )
     assert {n.member_id for n in reminded} == {club["cora"], club["lea"]}
+
+
+# ── Dashboard widgets ───────────────────────────────────────────────────────
+
+
+def test_matches_widget(db, club):
+    from hubra.core import contracts
+    from hubra.core.models.group import Group
+    from hubra.core.models.member import Member
+    from hubra_teams import services
+    from hubra_teams.models import TeamsAnswer, TeamsMatch, TeamsTeam
+
+    other = Group(name="Damen 1", type="team")
+    db.session.add(other)
+    db.session.flush()
+    mine = TeamsTeam(group_id=club["group"])
+    theirs = TeamsTeam(group_id=other.id)
+    db.session.add_all([mine, theirs])
+    db.session.flush()
+    soon = services.local_now() + timedelta(days=2)
+    first = TeamsMatch(team_id=mine.id, opponent="SC Gegner", home=True,
+                       starts_at=soon, location="Halle Nord")
+    db.session.add_all([
+        first,
+        TeamsMatch(team_id=mine.id, opponent="FC Weg", home=False,
+                   starts_at=soon + timedelta(days=7)),
+        TeamsMatch(team_id=mine.id, opponent="Abgesagt", starts_at=soon, cancelled=True),
+        TeamsMatch(team_id=mine.id, opponent="Vorbei", starts_at=soon - timedelta(days=9)),
+        TeamsMatch(team_id=theirs.id, opponent="FC Andere", starts_at=soon),
+    ])
+    db.session.flush()
+    db.session.add(TeamsAnswer(match_id=first.id, member_id=club["max"], answer="yes"))
+    db.session.commit()
+
+    max_ = db.session.get(Member, club["max"])
+    out = contracts.widget_data("teams.matches", {}, actor=max_)
+    assert [i["label"] for i in out["items"]] == [
+        "Herren 1 vs SC Gegner",
+        "Herren 1 @ FC Weg",
+    ]
+    assert "Halle Nord" in out["items"][0]["sub"]
+    assert out["items"][0]["sub"].endswith(("Dabei", "In"))
+    assert out["items"][1]["sub"].endswith(("Noch offen", "Not answered"))
+    assert out["items"][0]["path"] == f"/app/teams/matches/{first.id}"
+
+    every = contracts.widget_data("teams.matches", {"mine": False}, actor=max_)
+    assert len(every["items"]) == 3
+    # Ola plays in no team: nothing of her own, and no answer on others.
+    ola = db.session.get(Member, club["ola"])
+    assert contracts.widget_data("teams.matches", {}, actor=ola)["items"] == []
+    other_match = contracts.widget_data("teams.matches", {"mine": False}, actor=ola)
+    assert not any("offen" in i["sub"] or "answered" in i["sub"] for i in other_match["items"])
