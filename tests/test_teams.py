@@ -308,3 +308,25 @@ def test_matches_widget(db, club):
     assert contracts.widget_data("teams.matches", {}, actor=ola)["items"] == []
     other_match = contracts.widget_data("teams.matches", {"mine": False}, actor=ola)
     assert not any("offen" in i["sub"] or "answered" in i["sub"] for i in other_match["items"])
+
+
+def test_feed_connects_only_to_the_checked_address(monkeypatch):
+    # DNS rebinding: the host looked public when the link was saved and
+    # points into Hubra's own network at the fetch.
+    import pytest
+    from hubra_teams import feed
+
+    monkeypatch.delenv("TEAMS_FEED_ALLOW_PRIVATE", raising=False)
+    answers = iter(["93.184.215.14", "169.254.169.254"])
+    monkeypatch.setattr(
+        feed.socket,
+        "getaddrinfo",
+        lambda host, *a, **k: [(0, 0, 0, "", (next(answers), 443))],
+    )
+    monkeypatch.setattr(
+        feed.socket,
+        "create_connection",
+        lambda *a, **k: pytest.fail("connected to a private address"),
+    )
+    with pytest.raises(feed.FeedError, match="not a public address"):
+        feed.fetch("https://league.example.ch/team.ics")
