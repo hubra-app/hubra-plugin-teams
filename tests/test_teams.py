@@ -310,6 +310,71 @@ def test_matches_widget(db, club):
     assert not any("offen" in i["sub"] or "answered" in i["sub"] for i in other_match["items"])
 
 
+def test_feed_links_only_reach_public_hosts(monkeypatch):
+    """Private addresses are refused, also in their IPv6 forms, and the
+    connection goes to the address that was checked (no DNS rebinding)."""
+    import socket
+
+    from hubra_teams import feed
+
+    monkeypatch.delenv("TEAMS_FEED_ALLOW_PRIVATE", raising=False)
+    for name in ("HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"):
+        monkeypatch.delenv(name, raising=False)
+    for private in (
+        "127.0.0.1",
+        "10.1.2.3",
+        "169.254.169.254",
+        "::1",
+        "::ffff:127.0.0.1",
+        "64:ff9b::a9fe:a9fe",
+        "2002:7f00:1::",
+    ):
+        assert not feed._public(private), private
+    assert feed._public("8.8.8.8")
+
+    with pytest.raises(feed.FeedError):
+        feed.normalise("https://league.example:99999/team.ics")
+    with pytest.raises(feed.FeedError):
+        feed.normalise("http://league.example/team.ics")
+
+    answers = iter([["93.184.216.34"], ["127.0.0.1"]])
+
+    def resolve(host, port, *args, **kwargs):
+        ip = next(answers)[0]
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, port))]
+
+    connected = []
+
+    def connect(address, *args, **kwargs):
+        connected.append(address[0])
+        raise OSError("stop here")
+
+    monkeypatch.setattr(feed.socket, "getaddrinfo", resolve)
+    monkeypatch.setattr(feed.socket, "create_connection", connect)
+    # The second lookup (the rebinding answer) is refused before connecting.
+    with pytest.raises(feed.FeedError, match="not a public address"):
+        feed.fetch("https://league.example/team.ics")
+    assert connected == []
+
+
+def test_a_repeated_uid_in_the_feed_is_read_once(app, client, db, club):
+    from hubra_teams import services
+    from hubra_teams.models import TeamsMatch, TeamsTeam
+
+    team = TeamsTeam(group_id=club["group"], feed_url="https://league.example/t.ics")
+    db.session.add(team)
+    db.session.flush()
+    day = date.today() + timedelta(days=5)
+    text = _ics(day).replace(
+        "END:VCALENDAR", _ics(day + timedelta(days=1)).split("VERSION:2.0\r\n", 1)[1]
+    )
+    assert text.count("UID:m1@league") == 2
+    done = services.sync(team, text)
+    db.session.commit()
+    assert done["added"] == 2
+    assert db.session.query(TeamsMatch).filter_by(feed_uid="m1@league").count() == 1
+
+
 def test_feed_connects_only_to_the_checked_address(monkeypatch):
     # DNS rebinding: the host looked public when the link was saved and
     # points into Hubra's own network at the fetch.

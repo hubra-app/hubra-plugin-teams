@@ -15,7 +15,6 @@ import ipaddress
 import os
 import re
 import socket
-import ssl
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -38,46 +37,76 @@ def normalise(url: str) -> str:
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme != "https" or not parsed.hostname or parsed.username:
         raise FeedError("The calendar link must start with https:// or webcal://")
+    try:
+        parsed.port  # noqa: B018 - raises on a port like :99999
+    except ValueError:
+        raise FeedError("The calendar link has an invalid port") from None
     if len(url) > 500:
         raise FeedError("The calendar link is too long")
     return url
 
 
-def _address(host: str, port: int) -> str:
-    """The address to connect to; every address *host* has must be public."""
+_NAT64 = ipaddress.ip_network("64:ff9b::/96")
+
+
+def _public(address: str) -> bool:
+    """A global address, also through the IPv6 forms that carry an IPv4
+    one (::ffff:a.b.c.d, 2002::/16, NAT64)."""
+    ip = ipaddress.ip_address(address.split("%", 1)[0])
+    if isinstance(ip, ipaddress.IPv6Address):
+        inner = ip.ipv4_mapped or ip.sixtofour
+        if inner is None and ip in _NAT64:
+            inner = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
+        if inner is not None and not inner.is_global:
+            return False
+    return ip.is_global
+
+
+def _private_allowed() -> bool:
+    return os.environ.get("TEAMS_FEED_ALLOW_PRIVATE") == "1"
+
+
+def _resolve(host: str, port: int) -> list[str]:
+    """The host's addresses, refused when any one is not public."""
     try:
-        infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
     except OSError as exc:
         raise FeedError(f"{host} can't be found") from exc
     addresses = [info[4][0] for info in infos]
     if not addresses:
         raise FeedError(f"{host} can't be found")
-    if os.environ.get("TEAMS_FEED_ALLOW_PRIVATE") != "1":
-        for address in addresses:
-            if not ipaddress.ip_address(address).is_global:
-                raise FeedError(f"{host} is not a public address")
-    return addresses[0]
+    if not _private_allowed() and not all(_public(a) for a in addresses):
+        raise FeedError(f"{host} is not a public address")
+    return addresses
 
 
 def _check_host(url: str) -> None:
     parsed = urllib.parse.urlparse(url)
-    _address(parsed.hostname, parsed.port or 443)
+    _resolve(parsed.hostname, parsed.port or 443)
 
 
-class _CheckedHTTPS(http.client.HTTPSConnection):
-    """Connects to the address checked at connect time (not a second DNS
-    answer that could point into Hubra's own network), with SNI and the
-    certificate check for the host name."""
+class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+    """Connects to the address that was checked, not to a second DNS answer
+    (DNS rebinding), and still verifies the certificate for the host name."""
 
-    def connect(self) -> None:
-        address = _address(self.host, self.port)
-        sock = socket.create_connection((address, self.port), self.timeout)
-        self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+    def connect(self):
+        error: OSError | None = None
+        for address in _resolve(self.host, self.port):
+            try:
+                sock = socket.create_connection(
+                    (address, self.port), self.timeout, self.source_address
+                )
+            except OSError as exc:
+                error = exc
+                continue
+            self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+            return None
+        raise error or OSError("no address")
 
 
-class _CheckedHTTPSHandler(urllib.request.HTTPSHandler):
+class _PinnedHTTPSHandler(urllib.request.HTTPSHandler):
     def https_open(self, req):
-        return self.do_open(_CheckedHTTPS, req, context=ssl.create_default_context())
+        return self.do_open(_PinnedHTTPSConnection, req)
 
 
 class _CheckedRedirects(urllib.request.HTTPRedirectHandler):
@@ -95,7 +124,7 @@ def fetch(url: str) -> str:
     # No proxy from the environment: the checked address is the one
     # connected to.
     opener = urllib.request.build_opener(
-        urllib.request.ProxyHandler({}), _CheckedRedirects, _CheckedHTTPSHandler
+        urllib.request.ProxyHandler({}), _CheckedRedirects, _PinnedHTTPSHandler
     )
     try:
         with opener.open(req, timeout=TIMEOUT) as resp:
