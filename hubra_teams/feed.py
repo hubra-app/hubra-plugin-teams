@@ -4,6 +4,8 @@ Leagues publish match schedules as iCal (Swiss football, unihockey, handball
 and volleyball federations all offer a calendar link per team). Only public
 https hosts are fetched, so a coach can't point the server at its own
 network (TEAMS_FEED_ALLOW_PRIVATE=1 lifts that for a local test server).
+Every connection, redirects included, goes to the address that was checked,
+so a DNS answer that changes in between (DNS rebinding) can't get past it.
 """
 
 from __future__ import annotations
@@ -71,6 +73,8 @@ def _resolve(host: str, port: int) -> list[str]:
     except OSError as exc:
         raise FeedError(f"{host} can't be found") from exc
     addresses = [info[4][0] for info in infos]
+    if not addresses:
+        raise FeedError(f"{host} can't be found")
     if not _private_allowed() and not all(_public(a) for a in addresses):
         raise FeedError(f"{host} is not a public address")
     return addresses
@@ -86,9 +90,6 @@ class _PinnedHTTPSConnection(http.client.HTTPSConnection):
     (DNS rebinding), and still verifies the certificate for the host name."""
 
     def connect(self):
-        if self._tunnel_host:
-            # Through a proxy: the proxy connects; the host was checked.
-            return super().connect()
         error: OSError | None = None
         for address in _resolve(self.host, self.port):
             try:
@@ -120,7 +121,11 @@ def fetch(url: str) -> str:
     req = urllib.request.Request(
         url, headers={"User-Agent": "Hubra Teams", "Accept": "text/calendar"}
     )
-    opener = urllib.request.build_opener(_PinnedHTTPSHandler, _CheckedRedirects)
+    # No proxy from the environment: the checked address is the one
+    # connected to.
+    opener = urllib.request.build_opener(
+        urllib.request.ProxyHandler({}), _CheckedRedirects, _PinnedHTTPSHandler
+    )
     try:
         with opener.open(req, timeout=TIMEOUT) as resp:
             data = resp.read(LIMIT + 1)

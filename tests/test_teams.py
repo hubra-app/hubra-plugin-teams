@@ -373,3 +373,25 @@ def test_a_repeated_uid_in_the_feed_is_read_once(app, client, db, club):
     db.session.commit()
     assert done["added"] == 2
     assert db.session.query(TeamsMatch).filter_by(feed_uid="m1@league").count() == 1
+
+
+def test_feed_connects_only_to_the_checked_address(monkeypatch):
+    # DNS rebinding: the host looked public when the link was saved and
+    # points into Hubra's own network at the fetch.
+    import pytest
+    from hubra_teams import feed
+
+    monkeypatch.delenv("TEAMS_FEED_ALLOW_PRIVATE", raising=False)
+    answers = iter(["93.184.215.14", "169.254.169.254"])
+    monkeypatch.setattr(
+        feed.socket,
+        "getaddrinfo",
+        lambda host, *a, **k: [(0, 0, 0, "", (next(answers), 443))],
+    )
+    monkeypatch.setattr(
+        feed.socket,
+        "create_connection",
+        lambda *a, **k: pytest.fail("connected to a private address"),
+    )
+    with pytest.raises(feed.FeedError, match="not a public address"):
+        feed.fetch("https://league.example.ch/team.ics")
