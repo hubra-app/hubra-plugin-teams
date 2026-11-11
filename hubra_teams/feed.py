@@ -8,6 +8,7 @@ network (TEAMS_FEED_ALLOW_PRIVATE=1 lifts that for a local test server).
 
 from __future__ import annotations
 
+import http.client
 import ipaddress
 import os
 import re
@@ -34,22 +35,77 @@ def normalise(url: str) -> str:
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme != "https" or not parsed.hostname or parsed.username:
         raise FeedError("The calendar link must start with https:// or webcal://")
+    try:
+        parsed.port  # noqa: B018 - raises on a port like :99999
+    except ValueError:
+        raise FeedError("The calendar link has an invalid port") from None
     if len(url) > 500:
         raise FeedError("The calendar link is too long")
     return url
 
 
-def _check_host(url: str) -> None:
-    if os.environ.get("TEAMS_FEED_ALLOW_PRIVATE") == "1":
-        return
-    parsed = urllib.parse.urlparse(url)
+_NAT64 = ipaddress.ip_network("64:ff9b::/96")
+
+
+def _public(address: str) -> bool:
+    """A global address, also through the IPv6 forms that carry an IPv4
+    one (::ffff:a.b.c.d, 2002::/16, NAT64)."""
+    ip = ipaddress.ip_address(address.split("%", 1)[0])
+    if isinstance(ip, ipaddress.IPv6Address):
+        inner = ip.ipv4_mapped or ip.sixtofour
+        if inner is None and ip in _NAT64:
+            inner = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
+        if inner is not None and not inner.is_global:
+            return False
+    return ip.is_global
+
+
+def _private_allowed() -> bool:
+    return os.environ.get("TEAMS_FEED_ALLOW_PRIVATE") == "1"
+
+
+def _resolve(host: str, port: int) -> list[str]:
+    """The host's addresses, refused when any one is not public."""
     try:
-        infos = socket.getaddrinfo(parsed.hostname, parsed.port or 443)
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
     except OSError as exc:
-        raise FeedError(f"{parsed.hostname} can't be found") from exc
-    for info in infos:
-        if not ipaddress.ip_address(info[4][0]).is_global:
-            raise FeedError(f"{parsed.hostname} is not a public address")
+        raise FeedError(f"{host} can't be found") from exc
+    addresses = [info[4][0] for info in infos]
+    if not _private_allowed() and not all(_public(a) for a in addresses):
+        raise FeedError(f"{host} is not a public address")
+    return addresses
+
+
+def _check_host(url: str) -> None:
+    parsed = urllib.parse.urlparse(url)
+    _resolve(parsed.hostname, parsed.port or 443)
+
+
+class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+    """Connects to the address that was checked, not to a second DNS answer
+    (DNS rebinding), and still verifies the certificate for the host name."""
+
+    def connect(self):
+        if self._tunnel_host:
+            # Through a proxy: the proxy connects; the host was checked.
+            return super().connect()
+        error: OSError | None = None
+        for address in _resolve(self.host, self.port):
+            try:
+                sock = socket.create_connection(
+                    (address, self.port), self.timeout, self.source_address
+                )
+            except OSError as exc:
+                error = exc
+                continue
+            self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+            return None
+        raise error or OSError("no address")
+
+
+class _PinnedHTTPSHandler(urllib.request.HTTPSHandler):
+    def https_open(self, req):
+        return self.do_open(_PinnedHTTPSConnection, req)
 
 
 class _CheckedRedirects(urllib.request.HTTPRedirectHandler):
@@ -64,7 +120,7 @@ def fetch(url: str) -> str:
     req = urllib.request.Request(
         url, headers={"User-Agent": "Hubra Teams", "Accept": "text/calendar"}
     )
-    opener = urllib.request.build_opener(_CheckedRedirects)
+    opener = urllib.request.build_opener(_PinnedHTTPSHandler, _CheckedRedirects)
     try:
         with opener.open(req, timeout=TIMEOUT) as resp:
             data = resp.read(LIMIT + 1)

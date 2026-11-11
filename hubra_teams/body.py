@@ -2,15 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import date
-from decimal import Decimal, InvalidOperation
-
 from flask import request
 from sqlalchemy import select
 
 from hubra.core.errors import api_error
 from hubra.core.extensions import db
-from hubra.core.models.finance import TransactionCategory
 from hubra.core.models.member import Member
 from hubra.core.permissions import member_has_permission
 
@@ -55,49 +51,11 @@ def _int(data, key: str, low: int, high: int, default=None) -> int | None:
     return number
 
 
-def _date(data, key: str, required: bool = False) -> date | None:
-    value = data.get(key)
-    if not value:
-        if required:
-            raise Invalid(f"{key} is required")
-        return None
-    try:
-        return date.fromisoformat(str(value)[:10])
-    except ValueError:
-        raise Invalid(f"{key} must be a date (YYYY-MM-DD)") from None
-
-
-def _money(data, key: str, required: bool = False, positive: bool = False):
-    value = data.get(key)
-    if value is None or value == "":
-        if required:
-            raise Invalid(f"{key} is required")
-        return None
-    try:
-        amount = Decimal(str(value).replace(",", ".").replace("'", "")).quantize(
-            Decimal("0.01")
-        )
-    except InvalidOperation:
-        raise Invalid(f"{key} must be an amount") from None
-    if amount < 0 or amount >= Decimal("100000000"):
-        raise Invalid(f"{key} is out of range")
-    if positive and amount == 0:
-        raise Invalid(f"{key} must be more than 0")
-    return amount
-
-
 def _bool(data, key: str) -> bool:
     value = data.get(key)
     if isinstance(value, str):
         return value.lower() in ("1", "true", "yes", "on")
     return bool(value)
-
-
-def _category_id(data) -> int | None:
-    value = _int(data, "categoryId", 1, 2**31 - 1)
-    if value is not None and db.session.get(TransactionCategory, value) is None:
-        raise Invalid("categoryId: no such category")
-    return value
 
 
 def _get(model, row_id: int):
@@ -112,10 +70,6 @@ def _get(model, row_id: int):
 
 def _iso(value) -> str | None:
     return value.isoformat() if value else None
-
-
-def _num(value) -> float | None:
-    return float(value) if value is not None else None
 
 
 def _names(ids) -> dict[int, str]:

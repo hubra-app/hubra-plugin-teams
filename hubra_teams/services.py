@@ -152,6 +152,8 @@ def sync(team: TeamsTeam, text: str | None = None) -> dict:
     added = updated = cancelled = 0
     seen = set()
     for ev in events:
+        if ev.uid in seen:
+            continue  # a repeated UID (recurrence override): the first counts
         seen.add(ev.uid)
         opponent, home = feed.split_summary(ev.summary, team.feed_name)
         match = known.get(ev.uid)
