@@ -4,14 +4,18 @@ Leagues publish match schedules as iCal (Swiss football, unihockey, handball
 and volleyball federations all offer a calendar link per team). Only public
 https hosts are fetched, so a coach can't point the server at its own
 network (TEAMS_FEED_ALLOW_PRIVATE=1 lifts that for a local test server).
+Every connection, redirects included, goes to the address that was checked,
+so a DNS answer that changes in between (DNS rebinding) can't get past it.
 """
 
 from __future__ import annotations
 
+import http.client
 import ipaddress
 import os
 import re
 import socket
+import ssl
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -39,17 +43,41 @@ def normalise(url: str) -> str:
     return url
 
 
-def _check_host(url: str) -> None:
-    if os.environ.get("TEAMS_FEED_ALLOW_PRIVATE") == "1":
-        return
-    parsed = urllib.parse.urlparse(url)
+def _address(host: str, port: int) -> str:
+    """The address to connect to; every address *host* has must be public."""
     try:
-        infos = socket.getaddrinfo(parsed.hostname, parsed.port or 443)
+        infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
     except OSError as exc:
-        raise FeedError(f"{parsed.hostname} can't be found") from exc
-    for info in infos:
-        if not ipaddress.ip_address(info[4][0]).is_global:
-            raise FeedError(f"{parsed.hostname} is not a public address")
+        raise FeedError(f"{host} can't be found") from exc
+    addresses = [info[4][0] for info in infos]
+    if not addresses:
+        raise FeedError(f"{host} can't be found")
+    if os.environ.get("TEAMS_FEED_ALLOW_PRIVATE") != "1":
+        for address in addresses:
+            if not ipaddress.ip_address(address).is_global:
+                raise FeedError(f"{host} is not a public address")
+    return addresses[0]
+
+
+def _check_host(url: str) -> None:
+    parsed = urllib.parse.urlparse(url)
+    _address(parsed.hostname, parsed.port or 443)
+
+
+class _CheckedHTTPS(http.client.HTTPSConnection):
+    """Connects to the address checked at connect time (not a second DNS
+    answer that could point into Hubra's own network), with SNI and the
+    certificate check for the host name."""
+
+    def connect(self) -> None:
+        address = _address(self.host, self.port)
+        sock = socket.create_connection((address, self.port), self.timeout)
+        self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+
+
+class _CheckedHTTPSHandler(urllib.request.HTTPSHandler):
+    def https_open(self, req):
+        return self.do_open(_CheckedHTTPS, req, context=ssl.create_default_context())
 
 
 class _CheckedRedirects(urllib.request.HTTPRedirectHandler):
@@ -64,7 +92,11 @@ def fetch(url: str) -> str:
     req = urllib.request.Request(
         url, headers={"User-Agent": "Hubra Teams", "Accept": "text/calendar"}
     )
-    opener = urllib.request.build_opener(_CheckedRedirects)
+    # No proxy from the environment: the checked address is the one
+    # connected to.
+    opener = urllib.request.build_opener(
+        urllib.request.ProxyHandler({}), _CheckedRedirects, _CheckedHTTPSHandler
+    )
     try:
         with opener.open(req, timeout=TIMEOUT) as resp:
             data = resp.read(LIMIT + 1)
