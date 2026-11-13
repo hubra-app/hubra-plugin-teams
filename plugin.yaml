@@ -1,7 +1,7 @@
 id: teams
 name: Teams
 version: "1.1.1"
-hubra: ">=0.2.5,<1"
+hubra: ">=0.2.6,<1"
 description: "Match days for team sports: fixtures from the league's calendar feed, who can play, the coach's line-up, and carpooling to away games."
 author: Hubra
 homepage: https://github.com/hubra-app/hubra-plugin-teams
