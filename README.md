@@ -4,7 +4,7 @@
 
 A plugin for [Hubra](https://hubra.club). Match days for team sports: fixtures from the league's calendar feed, who can play, the coach's line-up, and carpooling to away games.
 
-**Version** 1.0.0 · **Works with** Hubra >=0.2,<1 · **Plugin id** `teams` · **Needs** the members and groups modules (and events, to show matches in the club calendar)
+**Version** 1.1.1 · **Works with** Hubra >=0.2.5,<1 · **Plugin id** `teams` · **Needs** the members and groups modules (and events, to show matches in the club calendar)
 
 ![Match](docs/screenshots/match.png)
 
