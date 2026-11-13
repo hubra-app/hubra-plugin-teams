@@ -1,6 +1,6 @@
 # Teams
 
-## Unreleased
+## 1.1.1
 
 - German: gender forms read "Spieler/in", "Trainer/in", like the rest of Hubra; "z. B." with a space.
 - Security: a fixture feed is downloaded from the address that was checked as public, so a calendar link can no longer reach the server's own network by answering DNS differently the second time (DNS rebinding). IPv6 forms of private IPv4 addresses (::ffff:, 2002::, NAT64) count as private too.
