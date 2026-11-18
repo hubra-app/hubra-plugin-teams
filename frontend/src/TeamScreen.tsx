@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, Anchor, Button, Group, SegmentedControl, Stack, Switch, Text, TextInput, Textarea, NumberInput } from '@mantine/core'
 import { IconAlertTriangle, IconArrowLeft, IconCalendarEvent, IconPlus, IconRefresh, IconSettings } from '@tabler/icons-react'
-import { ConfirmModal, EmptyState, ErrorBanner, Field, LoadingSpinner, Modal, PageHead, Seg, formatDateTime, useT } from '@hubra/plugin-sdk'
+import { ConfirmModal, DateField, EmptyState, ErrorBanner, Field, formatDateTime, LoadingSpinner, Modal, PageHead, Seg, TimeField, useT } from '@hubra/plugin-sdk'
 import {
   QK,
   createMatch,
@@ -207,13 +207,13 @@ export function MatchModal({ teamId, match, home: homeLocation, onClose }: { tea
       </Field>
       <Group grow align="flex-start">
         <Field label={t('teams.day')}>
-          <TextInput type="date" value={day} onChange={(e) => setDay(e.currentTarget.value)} />
+          <DateField value={day} onChange={setDay} />
         </Field>
         <Field label={t('teams.kickoff')}>
-          <TextInput type="time" value={time} onChange={(e) => setTime(e.currentTarget.value)} />
+          <TimeField value={time} onChange={setTime} />
         </Field>
         <Field label={t('teams.meet')}>
-          <TextInput type="time" value={meet} onChange={(e) => setMeet(e.currentTarget.value)} />
+          <TimeField value={meet} onChange={setMeet} />
         </Field>
       </Group>
       <Field label={t('teams.where')}>

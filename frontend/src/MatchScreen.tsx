@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Anchor, Badge, Button, Group, NumberInput, Paper, SegmentedControl, SimpleGrid, Stack, Text, TextInput, Title } from '@mantine/core'
 import { IconArrowLeft, IconCar, IconClock, IconEdit, IconMapPin, IconPlus, IconTrash } from '@tabler/icons-react'
-import { ConfirmModal, ErrorBanner, Field, LoadingSpinner, Modal, PageHead, useT } from '@hubra/plugin-sdk'
+import { ConfirmModal, ErrorBanner, Field, LoadingSpinner, Modal, PageHead, TimeField, useT } from '@hubra/plugin-sdk'
 import {
   QK,
   deleteMatch,
@@ -492,7 +492,7 @@ function RideModal({ matchId, onClose }: { matchId: number; onClose: () => void 
           <NumberInput value={seats} onChange={setSeats} min={1} max={60} data-autofocus />
         </Field>
         <Field label={t('teams.departsField')}>
-          <TextInput type="time" value={departs} onChange={(e) => setDeparts(e.currentTarget.value)} />
+          <TimeField value={departs} onChange={setDeparts} />
         </Field>
       </Group>
       <Field label={t('teams.fromPlace')}>
